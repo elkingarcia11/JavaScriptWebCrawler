@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+	<body>
+
+		<h2>WebCrawler using JavaScript</h2>
+
+		<h3>Internet One</h3>
+		<div id= "internetOne"></div>
+
+		<h3>Internet Two</h3>
+		<div id= "internetTwo"></div>
+
+		<script>
+
+			var internetOneJSON =
+			{
+				"pages": [
+    			{
+			      "address":"http://foo.bar.com/p1",
+			      "links": ["http://foo.bar.com/p2", "http://foo.bar.com/p3", "http://foo.bar.com/p4"]
+			    },
+			    {
+			      "address":"http://foo.bar.com/p2",
+			      "links": ["http://foo.bar.com/p2", "http://foo.bar.com/p4"]
+			    },
+			    {
+			      "address":"http://foo.bar.com/p4",
+			      "links": ["http://foo.bar.com/p5", "http://foo.bar.com/p1", "http://foo.bar.com/p6"]
+			    },
+			    {
+			      "address":"http://foo.bar.com/p5",
+			      "links": []
+			    },
+			    {
+			      "address":"http://foo.bar.com/p6",
+			      "links": ["http://foo.bar.com/p7", "http://foo.bar.com/p4", "http://foo.bar.com/p5"]
+			    }
+  			]
+			};
+
+			var internetTwoJSON =
+			{
+			  "pages": [
+			      {
+			      "address":"http://foo.bar.com/p1",
+			      "links": ["http://foo.bar.com/p2"]
+			    },
+			    {
+			      "address":"http://foo.bar.com/p2",
+			      "links": ["http://foo.bar.com/p3"]
+			    },
+			    {
+			      "address":"http://foo.bar.com/p3",
+			      "links": ["http://foo.bar.com/p4"]
+			    },
+			    {
+			      "address":"http://foo.bar.com/p4",
+			      "links": ["http://foo.bar.com/p5"]
+			    },
+			    {
+			      "address":"http://foo.bar.com/p5",
+			      "links": ["http://foo.bar.com/p1"]
+			    },
+			    {
+			      "address":"http://foo.bar.com/p6",
+			      "links": ["http://foo.bar.com/p1"]
+			    }
+			  ]
+			};
+
+			// CRAWL!
+			webCrawler(internetOneJSON, "internetOne");
+			webCrawler(internetTwoJSON, "internetTwo");
+
+			// Due to graph-like data structure (interconnected links),
+			// we are using Depth-First Traversal to assure completion even with duplicates
+				// Assumption 1: Not considering "Empty Internet" case,
+					// which would check if pages length > 0 and return empty lists for success, skipped, and error if so
+				// Assumption 2: No addresses/links can be empty ""/[], unless we have reached the end of the addresses/links
+
+			// Pre-Condition: Internet JSON Object with size > 0, _id referring to <p> element
+			function webCrawler(internet, _id){
+				// Initialize lists for pages, success, skipped, error
+				var validPages = [];
+				var successList = [];
+				var skippedList = [];
+				var errorList = [];
+				var visitedList = [];
+
+				var i;
+				var len = internet.pages.length;
+
+				// Store valid links
+				for(i = 0; i < len; i++){
+					validPages.push(internet.pages[i].address);
+				}
+
+				var crawlRes = crawlPage(internet.pages[0], internet, validPages, successList, skippedList, errorList, visitedList);
+				successList = crawlRes[0];
+				skippedList = crawlRes[1];
+				errorList = crawlRes[2];
+				visitedList = crawlRes[3];
+
+				// Update HTML PAGE
+				var para1 = document.createElement("p");
+				var para2 = document.createElement("p");
+				var para3 = document.createElement("p");
+				var successNode = document.createTextNode("Success: "+'['+ successList +']');
+				var skippedNode = document.createTextNode("Skipped: "+'['+ skippedList +']');
+				var errorNode = document.createTextNode("Error: "+'['+ errorList +']');
+
+				para1.appendChild(successNode);
+				para2.appendChild(skippedNode);
+				para3.appendChild(errorNode);
+				var element = document.getElementById(_id);
+				element.appendChild(para1);
+				element.appendChild(para2);
+				element.appendChild(para3);
+			}; // Post-Condition: HTML was updated with the pages that were successful, skipped, and invalid
+
+
+			// Pre-Condition: Non-empty Page JSON Object containing address and links
+			function crawlPage(page, internet, validPages, succList, skipList, errList, vstdList){
+				// Retrieve current lists for pages, success, skipped, error
+				var successList = succList;
+				var skippedList = skipList;
+				var errorList = errList;
+				var visitedList = vstdList;
+
+				if(!(visitedList.includes(page.address))){
+					visitedList.push(page.address);
+				}
+
+				// Check if current page has any links
+				if(page.links == undefined || page.links == null){
+						return [successList, skippedList, errorList, visitedList];
+				} else {
+					var j;
+					// Run through links
+					for(j=0;j<page.links.length;j++){
+						// Retrieve a link from page
+						var childLink = page.links[j];
+						// Check if current child link is valid
+						if(validPages.includes(childLink)){
+							// Check if current child has been crawled
+							if(successList.includes(childLink)){
+								if(!(skippedList.includes(childLink))){
+									skippedList.push(childLink);
+								}
+							} else if (visitedList.includes(childLink)){
+								// Hasn't been crawled, check if its been visited (original page)
+								successList.push(childLink);
+								if(!(skippedList.includes(childLink))){
+									skippedList.push(childLink);
+								}
+							} else {
+								// Hasn't been crawled or visited - go crawl link
+								successList.push(childLink);
+								var newLink = findPage(childLink, internet);
+								var crawlRes = crawlPage(newLink, internet, validPages, successList, skippedList, errorList, visitedList);
+								successList = crawlRes[0];
+								skippedList = crawlRes[1];
+								errorList = crawlRes[2];
+								visitedList = crawlRes[3];
+							}
+						} else {
+							// Add to error list if invalid
+							if(!(errorList.includes(childLink))){
+								errorList.push(childLink);
+							}
+						}
+					}
+					// Ran through links, now return updated success, skipped and error lists
+					return [successList, skippedList, errorList, visitedList];
+				}
+			} // Post-Condition: Returns array with success, skipped (duplicate), and error (invalid) lists
+
+			// Pre-Condition: Valid address and valid internet
+			function findPage(address, internet){
+				var i;
+				var len = internet.pages.length;
+
+				for(i=0;i<len; i++){
+					if(internet.pages[i].address == address){
+						return internet.pages[i];
+					}
+				}
+			} // Post-Condition: Returns the page and links associated with the address
+
+		</script>
+	</body>
+</html>
